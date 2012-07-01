@@ -12,7 +12,9 @@ import org.neo4j.graphdb.index.Index;
 import org.neo4j.tooling.GlobalGraphOperations;
 
 /**
- * Hello world!
+ * Simple friends relationships demo using embedded Neo4j.
+ * 
+ * Lou Mauget, June 30, 2012.
  * 
  */
 public class App {
