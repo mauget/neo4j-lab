@@ -9,6 +9,7 @@ import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 import org.neo4j.graphdb.index.Index;
+import org.neo4j.tooling.GlobalGraphOperations;
 
 /**
  * Hello world!
@@ -23,11 +24,13 @@ public class App {
 	private static Logger logger = Logger.getLogger(App.class);
 
 	private GraphDatabaseService graphDb;
+	// Index of all nodes
 	private Index<Node> nodeIndex;
+	// Holds a ref to every user node
 	private Node usersReferenceNode;
 
 	public enum RelTypes implements RelationshipType {
-		IS_FRIEND_OF, HAS_SEEN, USER, USERS_REFERENCE
+		IS_FRIEND_OF, HAS_SEEN, USER
 	}
 
 	public static void main(String[] args) {
@@ -38,13 +41,23 @@ public class App {
 		startDb();
 		createUsers();
 
-		showFriendsOf("Ed Mauget");
-		showFriendsOf("Molly Mauget");
-		showFriendsOf("Pixie Mauget");
-		showFriendsOf("Nellie Mauget");
+		showAllFriends();
 
 		removeAll();
 		shutdownDb();
+	}
+	
+	private void showAllFriends() {
+		
+		for (Relationship rel : getUsersReferenceNode().getRelationships(RelTypes.USER, Direction.OUTGOING)) {
+			
+			Node friendNode = rel.getEndNode();
+			String friendName = (String) friendNode.getProperty(USERNAME_KEY);
+			
+			// Yes we could just pass the friendNode in this case, 
+			// but, in general, we want showFriends to take a friend name, not a node directly.
+			showFriendsOf(friendName);
+		}
 	}
 
 	private void startDb() {
@@ -58,30 +71,33 @@ public class App {
 	}
 
 	private void showFriendsOf(String userName) {
-		// Find userName
+		// Find userName (illustrates finding nodes from index by property)
 		// If found, list his friends' names
 
 		// Take first node having property userName. Assumes no users created with same name.
 		logger.info(String.format("Friends of %s:", userName));
 		Node node = nodeIndex.get(USERNAME_KEY, userName).getSingle();
 		
-		if (node != null) {
+		showFriendsOf(node);
+	}
+	
+	private void showFriendsOf(Node userNode) {
 
-			for (Relationship rel : node.getRelationships(Direction.OUTGOING)) {
+		if (userNode != null) {
+
+			for (Relationship rel : userNode.getRelationships(Direction.OUTGOING)) {
 				
 				if (rel.isType(RelTypes.IS_FRIEND_OF)) {
 
 					Node friendNode = rel.getEndNode();
+					String userName = (String) userNode.getProperty(USERNAME_KEY);
 					String friendName = (String) friendNode.getProperty(USERNAME_KEY);
 					
-					logger.info(String.format("\t%s knows %s", userName,
-							friendName));
-					// Descend
-					//showFriendsOf(friendName);
+					logger.info(String.format("\t%s knows %s", userName, friendName));
 				}
 			}
 		} else {
-			logger.info(String.format("User %s not found", userName));
+			logger.info(String.format("User %s invalid", userNode));
 		}
 	}
 
@@ -142,34 +158,23 @@ public class App {
 
 		Transaction tx = graphDb.beginTx();
 		try {
-			// For each user in the user relationshipNode relation:
-			for (Relationship relationship : graphDb.getReferenceNode().getRelationships(RelTypes.USER, Direction.OUTGOING)) {
-				
-				Node user = relationship.getEndNode();
-				String name = (String) user.getProperty(USERNAME_KEY);
-				
-				relationship.delete();
-				
-				// Sever all ties in either direction
-				for (Relationship friendRel : user.getRelationships()){
-					friendRel.delete();
-				}
-				// ... before removing user
-				user.delete();
-
-				logger.info(String.format(MSG_DELETED_USER, name));
-			}
+			GlobalGraphOperations ops = GlobalGraphOperations.at(graphDb);
 			
-			for (Relationship relationship : graphDb.getReferenceNode().getRelationships()) { //Direction.OUTGOING)) {
+			for (Relationship relationship : ops.getAllRelationships()){
 				relationship.delete();
 			}
-			
-			// Index now has refs to non-existent nodes. Just remove the index.
-			nodeIndex.delete();
-			
+			for (Node node : ops.getAllNodes()){
+				node.delete();
+			}
 			usersReferenceNode = null;
 			
+			// Index has refs to non-existent nodes. Just remove the index.
+			nodeIndex.delete();
+			nodeIndex = null;
+			
 			tx.success();
+			logger.info("Deleted all relationships and nodes");
+			
 		} catch (Exception e) {
 			logger.error(e.toString());
 			tx.failure();
@@ -183,8 +188,6 @@ public class App {
 			Transaction tx = graphDb.beginTx();
 			try {
 				usersReferenceNode = graphDb.createNode();
-	            graphDb.getReferenceNode().createRelationshipTo(
-	                usersReferenceNode, RelTypes.USERS_REFERENCE );
 			} catch (Exception e) {
 				logger.error(e.toString());
 				tx.failure();
