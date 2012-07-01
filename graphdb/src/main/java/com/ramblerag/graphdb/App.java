@@ -17,7 +17,6 @@ import org.neo4j.tooling.GlobalGraphOperations;
  */
 public class App {
 	private static final String INDEX_NAME = "nodes";
-	private static final String MSG_DELETED_USER = "Deleted user: %s";
 	private static final String MSG_CREATED_USER = "Created user: %s";
 	private static final String USERNAME_KEY = "name";
 	private static final String DB_PATH = "var/graphDb";
