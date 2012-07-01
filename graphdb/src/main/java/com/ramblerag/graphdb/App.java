@@ -37,13 +37,17 @@ public class App {
 	}
 
 	public void execute(String[] args) {
+		logger.info("Begin friends graph demo");
 		startDb();
 		createUsers();
 
+		logger.info("Show friends");
 		showAllFriends();
+		logger.info("Finished showing friends");
 
 		removeAll();
 		shutdownDb();
+		logger.info("End friends graph demo");
 	}
 	
 	private void showAllFriends() {
